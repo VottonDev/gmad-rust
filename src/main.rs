@@ -83,9 +83,8 @@ fn extract_file(input_path: &Path, output_dir: &Path) -> io::Result<()> {
     fs::create_dir_all(&addon_path)?;
 
     for file in addon_files {
-        let sanitized_name = sanitize_filename(&file.name);
-        println!("Extracting {} ({}B)", sanitized_name, file.size);
-        let output_file_path = create_output_file_path(&addon_path, &sanitized_name);
+        println!("Extracting {} ({}B)", file.name, file.size);
+        let output_file_path = create_output_file_path(&addon_path, &file.name);
         let mut output = fopenwb(&output_file_path)?;
         let mut buffer = vec![0u8; file.size as usize];
         input.read_exact(&mut buffer)?;
@@ -99,10 +98,9 @@ fn extract_file(input_path: &Path, output_dir: &Path) -> io::Result<()> {
 }
 
 fn create_output_file_path(addon_path: &Path, file_name: &str) -> PathBuf {
-    let components: Vec<&str> = file_name.split('/').collect();
-    let mut path = addon_path.to_owned();
-    for component in components {
-        path = path.join(component);
+    let path = addon_path.join(file_name);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).expect("Error creating directory");
     }
     path
 }
@@ -117,13 +115,28 @@ fn main() -> io::Result<()> {
     println!("GMAD Extractor by Votton");
 
     let args: Vec<OsString> = env::args_os().collect();
-    if args.len() < 3 {
-        eprintln!("No file/directory specified");
-        return Err(io::Error::new(io::ErrorKind::InvalidInput, "No file/directory specified"));
+    let mut output_dir = Path::new("addon_output");
+
+    if args.len() < 2 {
+        eprintln!("No file specified. Please provide a .gma file as an argument or drag and drop it onto the executable.");
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "No file specified"));
     }
 
     let input_path = Path::new(&args[1]);
-    let output_dir = Path::new(&args[2]);
+
+    if !input_path.exists() {
+        eprintln!("File does not exist: {}", input_path.display());
+        return Err(io::Error::new(io::ErrorKind::NotFound, "File does not exist"));
+    }
+
+    if !input_path.is_file() {
+        eprintln!("{} is not a file!", input_path.display());
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "Input path is not a file"));
+    }
+
+    if args.len() >= 3 {
+        output_dir = Path::new(&args[2]);
+    }
 
     if !output_dir.exists() {
         fs::create_dir_all(&output_dir).expect("Error creating output directory");
@@ -134,26 +147,7 @@ fn main() -> io::Result<()> {
         return Err(io::Error::new(io::ErrorKind::InvalidInput, "Output path is not a directory"));
     }
 
-    fn visit_dirs(dir: &Path, output_dir: &Path, cb: &dyn Fn(&Path, &Path) -> io::Result<()>) -> io::Result<()> {
-        if dir.is_dir() {
-            for entry in fs::read_dir(dir)? {
-                let entry = entry?;
-                let path = entry.path();
-                if path.is_dir() {
-                    visit_dirs(&path, output_dir, cb)?;
-                } else {
-                    cb(&path, output_dir)?;
-                }
-            }
-        }
-        Ok(())
-    }
-
-    if is_directory(input_path) {
-        visit_dirs(input_path, output_dir, &extract_file)?;
-    } else {
-        extract_file(input_path, output_dir)?;
-    }
+    extract_file(input_path, output_dir)?;
 
     Ok(())
 }
