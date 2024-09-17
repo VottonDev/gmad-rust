@@ -48,7 +48,7 @@ fn extract_file(input_path: &Path, output_dir: &Path) -> io::Result<()> {
     }
 
     input.seek(io::SeekFrom::Current(18))?;
-    let addon_name = ztstr(&mut input)?;
+    let addon_name = sanitize_filename(&ztstr(&mut input)?);
     ztstr(&mut input)?; // Ignore addon description
     ztstr(&mut input)?; // Ignore addon author
     input.seek(io::SeekFrom::Current(4))?;
@@ -83,8 +83,9 @@ fn extract_file(input_path: &Path, output_dir: &Path) -> io::Result<()> {
     fs::create_dir_all(&addon_path)?;
 
     for file in addon_files {
-        println!("Extracting {} ({}B)", file.name, file.size);
-        let output_file_path = create_output_file_path(&addon_path, &file.name);
+        let sanitized_name = sanitize_filename(&file.name);
+        println!("Extracting {} ({}B)", sanitized_name, file.size);
+        let output_file_path = create_output_file_path(&addon_path, &sanitized_name);
         let mut output = fopenwb(&output_file_path)?;
         let mut buffer = vec![0u8; file.size as usize];
         input.read_exact(&mut buffer)?;
@@ -104,6 +105,12 @@ fn create_output_file_path(addon_path: &Path, file_name: &str) -> PathBuf {
         path = path.join(component);
     }
     path
+}
+
+fn sanitize_filename(filename: &str) -> String {
+    filename
+        .replace(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '-' && c != '.', "_")
+        .replace("..", "_")
 }
 
 fn main() -> io::Result<()> {
