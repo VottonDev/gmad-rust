@@ -83,9 +83,8 @@ fn extract_file(input_path: &Path, output_dir: &Path) -> io::Result<()> {
     fs::create_dir_all(&addon_path)?;
 
     for file in addon_files {
-        let sanitized_name = sanitize_filename(&file.name);
-        println!("Extracting {} ({}B)", sanitized_name, file.size);
-        let output_file_path = create_output_file_path(&addon_path, &sanitized_name);
+        println!("Extracting {} ({}B)", file.name, file.size);
+        let output_file_path = create_output_file_path(&addon_path, &file.name);
         let mut output = fopenwb(&output_file_path)?;
         let mut buffer = vec![0u8; file.size as usize];
         input.read_exact(&mut buffer)?;
@@ -99,10 +98,9 @@ fn extract_file(input_path: &Path, output_dir: &Path) -> io::Result<()> {
 }
 
 fn create_output_file_path(addon_path: &Path, file_name: &str) -> PathBuf {
-    let components: Vec<&str> = file_name.split('/').collect();
-    let mut path = addon_path.to_owned();
-    for component in components {
-        path = path.join(component);
+    let path = addon_path.join(file_name);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).expect("Error creating directory");
     }
     path
 }
